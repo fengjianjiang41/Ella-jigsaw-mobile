@@ -138,899 +138,265 @@ let bunClickCount = 0;
 
 let confirmBtnClicked = false;
 
-// Difficulty settings
-let currentDifficulty = 1; // 1: 休闲, 2: 普通, 3: 困难, 4: 炼狱
-let difficultySelected = false; // 标记是否已选择难度
-let difficulty4Unlocked = false; // 标记难度4是否已解锁
-let difficulty3SolvedOnce = false; // 标记难度3是否已解决一次
-const difficultySettings = {
-  1: { gridSize: 2, speed: 4, lensSize: 600 }, // 2x2, 慢, 大镜头
-  2: { gridSize: 3, speed: 6, lensSize: 400 }, // 3x3, 中, 中镜头
-  3: { gridSize: 4, speed: 8, lensSize: 300 }, // 4x4, 快, 小镜头
-  4: { gridSize: 4, speed: 8, lensSize: 300 }, // 4x4, 炼狱难度
-};
-let gridSize = difficultySettings[currentDifficulty].gridSize;
-const canvasXSize = 1344;
-const canvasYSize = 768;
-let pieceXSize = canvasXSize / gridSize;
-let pieceYSize = canvasYSize / gridSize;
-
-let canvases = [];
-let ctxs = [];
-let puzzles = [];
-let timer = 0,
-  timerInterval = null;
-let allSolved = [false, false, false];
-let nickname = "";
-let page5ActiveTimer = 0;
-let page5TimerInterval = null;
-let page5Active = false;
 let currentActivePage = "page1"; // Track current active page
 
-function formatTime(ms) {
-  let s = Math.floor(ms / 1000);
-  let ms2 = Math.floor((ms % 1000) / 10);
-  let min = Math.floor(s / 60);
-  s = s % 60;
-  return `${min.toString().padStart(2, "0")}:${s
-    .toString()
-    .padStart(2, "0")}.${ms2.toString().padStart(2, "0")}`;
-}
+// 音频启用状态
+let soundEnabled = true;
 
-function startTimer() {
-  timer = 0;
-  const floatingTimer = document.getElementById("floatingTimer");
-  const page6Timer = document.getElementById("page6Timer");
-  if (floatingTimer) floatingTimer.textContent = formatTime(timer);
-  if (page6Timer) page6Timer.textContent = formatTime(timer);
-  timerInterval = setInterval(() => {
-    timer += 10;
-    if (floatingTimer) floatingTimer.textContent = formatTime(timer);
-    if (page6Timer) page6Timer.textContent = formatTime(timer);
-  }, 10);
-}
-function stopTimer() {
-  clearInterval(timerInterval);
-}
+// Audio pool for ball-wall collision sounds
+const ballWallAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
 
-function pauseTimer() {
-  clearInterval(timerInterval);
-}
-
-function resumeTimer() {
-  const floatingTimer = document.getElementById("floatingTimer");
-  const page6Timer = document.getElementById("page6Timer");
-  if (floatingTimer) floatingTimer.textContent = formatTime(timer);
-  if (page6Timer) page6Timer.textContent = formatTime(timer);
-  timerInterval = setInterval(() => {
-    timer += 10;
-    if (floatingTimer) floatingTimer.textContent = formatTime(timer);
-    if (page6Timer) page6Timer.textContent = formatTime(timer);
-  }, 10);
-}
-
-// Page5 active timer functions
-function startPage5Timer() {
-  if (page5TimerInterval) {
-    clearInterval(page5TimerInterval);
-  }
-  page5TimerInterval = setInterval(() => {
-    page5ActiveTimer += 100;
-    if (page5ActiveTimer > 30000) {
-      // 30 seconds
-      showPage5Hint();
-    }
-  }, 100);
-}
-
-function stopPage5Timer() {
-  if (page5TimerInterval) {
-    clearInterval(page5TimerInterval);
-    page5TimerInterval = null;
-  }
-}
-
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.src = src;
-  });
-}
-
-class Piece {
-  constructor(img, sx, sy, x, y, idx, puzzleIdx) {
-    this.img = img;
-    this.sx = sx;
-    this.sy = sy;
-    this.x = x + canvasXSize / 2;
-    this.y = y + canvasYSize / 2;
-    this.vx = 0;
-    this.vy = 0;
-    this.group = [this];
-    this.idx = idx;
-    this.dragging = false;
-    this.offsetX = 0;
-    this.offsetY = 0;
-    this.puzzleIdx = puzzleIdx;
-    // Size animation properties
-    this.size = 1.0;
-    this.targetSize = 1.0;
-    this.sizeSpeed = 0;
-    this.animationStartTime = 0;
-    this.animationDuration = 0;
-    this.originalVx = 0;
-    this.originalVy = 0;
-    // Breathing effect properties (only for apple and hongbao puzzles)
-    if (puzzleIdx === 1 || puzzleIdx === 2) {
-      this.alpha = 1;
-      this.period = 5000 + Math.random() * 5000; // 2-5 seconds
-      this.phase = Math.random() * Math.PI * 2;
-      this.time = 0;
-    } else {
-      this.alpha = 1;
-    }
-  }
-  draw(ctx) {
-    ctx.globalAlpha = this.alpha;
-    ctx.drawImage(
-      this.img,
-      this.sx,
-      this.sy,
-      pieceXSize,
-      pieceYSize,
-      this.x - (pieceXSize * (this.size - 1)) / 2,
-      this.y - (pieceYSize * (this.size - 1)) / 2,
-      pieceXSize * this.size,
-      pieceYSize * this.size,
-    );
-    ctx.globalAlpha = 1;
-  }
-  contains(mx, my) {
-    return (
-      mx >= this.x &&
-      mx < this.x + pieceXSize &&
-      my >= this.y &&
-      my < this.y + pieceYSize
-    );
-  }
-}
-
-async function setupPuzzle(canvas, ctx, imgPath, puzzleIdx) {
-  const img = await loadImage(imgPath);
-  let pieces = [];
-  for (let row = 0; row < gridSize; row++) {
-    for (let col = 0; col < gridSize; col++) {
-      pieces.push(
-        new Piece(
-          img,
-          col * pieceXSize,
-          row * pieceYSize,
-          col * pieceXSize,
-          row * pieceYSize,
-          row * gridSize + col,
-          puzzleIdx,
-        ),
-      );
-    }
-  }
-  puzzles[puzzleIdx] = {
-    pieces,
-    img,
-    started: false,
-    solved: false,
-    draggingPiece: null,
-    offsetX: 0,
-    offsetY: 0,
-    mouseX: 0,
-    mouseY: 0,
-    mouseOver: false,
-    boundaryHighlight: false,
-    mergeHighlight: false,
-    animationInProgress: false,
-    animationTimeout: null,
-  };
-  drawPuzzle(puzzleIdx);
-}
-
-function drawPuzzle(idx) {
-  const {
-    pieces,
-    mouseX,
-    mouseY,
-    mouseOver,
-    boundaryHighlight,
-    mergeHighlight,
-  } = puzzles[idx];
-  ctxs[idx].clearRect(0, 0, canvasXSize * 2, canvasYSize * 2);
-
-  // Draw boundary
-  if (mergeHighlight) {
-    ctxs[idx].strokeStyle = "#c7ffc7ff";
-    ctxs[idx].lineWidth = 40000;
-  } else if (boundaryHighlight) {
-    ctxs[idx].strokeStyle = "#ffb3c2";
-    ctxs[idx].lineWidth = 40;
-  } else {
-    ctxs[idx].strokeStyle = "#000000";
-    ctxs[idx].lineWidth = 2;
-  }
-  ctxs[idx].strokeRect(0, 0, canvasXSize * 2, canvasYSize * 2);
-
-  // Lens parameters (only for hongbao puzzle)
-  const isHongbao = idx === 2;
-  const lensDiameter = difficultySettings[currentDifficulty].lensSize;
-  const lensRadius = lensDiameter / 2;
-
-  // If it's the hongbao puzzle, mouse is over, and no animation in progress, draw with lens effect
-  if (isHongbao && mouseOver && !puzzles[idx].animationInProgress) {
-    // Draw white blanket first
-    ctxs[idx].fillStyle = "white";
-    ctxs[idx].fillRect(0, 0, canvasXSize * 2, canvasYSize * 2);
-
-    // Create clipping path for the circular hole
-    ctxs[idx].save();
-    ctxs[idx].beginPath();
-    ctxs[idx].arc(mouseX, mouseY, lensRadius, 0, Math.PI * 2);
-    ctxs[idx].clip();
-
-    // Draw all pieces inside the clipping path (visible through the hole)
-    for (const piece of pieces) {
-      piece.draw(ctxs[idx]);
+  getAudio() {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio("audio/ballwall.mp3");
+      this.audioObjects.push(newAudio);
+      return newAudio;
     }
 
-    // Restore context
-    ctxs[idx].restore();
-
-    // Draw border around the hole
-    if (mergeHighlight) {
-      ctxs[idx].strokeStyle = "#00ff00";
-      ctxs[idx].lineWidth = 40;
-    } else if (boundaryHighlight) {
-      ctxs[idx].strokeStyle = "#ffb3c2";
-      ctxs[idx].lineWidth = 40;
-    } else {
-      ctxs[idx].strokeStyle = "black";
-      ctxs[idx].lineWidth = 2;
-    }
-    ctxs[idx].beginPath();
-    ctxs[idx].arc(mouseX, mouseY, lensRadius, 0, Math.PI * 2);
-    ctxs[idx].stroke();
-  } else {
-    // Not hongbao, mouse not over, or animation in progress - draw all pieces normally
-    for (const piece of pieces) {
-      piece.draw(ctxs[idx]);
-    }
-  }
-}
-
-function scatterPieces(idx) {
-  const { pieces } = puzzles[idx];
-  const speed = difficultySettings[currentDifficulty].speed;
-  for (const piece of pieces) {
-    piece.x = Math.random() * (2 * canvasXSize - pieceXSize);
-    piece.y = Math.random() * (2 * canvasYSize - pieceYSize);
-    piece.vx = (Math.random() - 0.5) * speed;
-    piece.vy = (Math.random() - 0.5) * speed;
-  }
-}
-
-function animatePuzzle(idx) {
-  if (!puzzles[idx].started) return;
-  const { pieces } = puzzles[idx];
-  const currentTime = Date.now();
-  let boundaryHit = false;
-
-  for (const piece of pieces) {
-    if (piece.dragging) continue;
-
-    // Handle size animation
-    if (piece.animationStartTime > 0) {
-      const elapsed = currentTime - piece.animationStartTime;
-      if (elapsed < piece.animationDuration) {
-        // Calculate size based on animation progress
-        const progress = elapsed / piece.animationDuration;
-        if (piece.targetSize > 1.0) {
-          // Expanding phase
-          piece.size = 1.0 + (piece.targetSize - 1.0) * progress;
-          // Slow down speed during expansion
-          piece.vx = piece.originalVx * 0.5;
-          piece.vy = piece.originalVy * 0.5;
-        } else {
-          // Shrinking phase
-          piece.size = piece.targetSize - (piece.targetSize - 1.0) * progress;
-          // Restore original speed during shrinking
-          piece.vx = piece.originalVx;
-          piece.vy = piece.originalVy;
-        }
-      } else {
-        // Animation complete
-        piece.size = piece.targetSize;
-        piece.animationStartTime = 0;
-        // Restore original speed
-        piece.vx = piece.originalVx;
-        piece.vy = piece.originalVy;
+    // Find a non-playing audio object
+    for (const audio of this.audioObjects) {
+      if (audio.paused) {
+        audio.currentTime = 0;
+        return audio;
       }
     }
 
-    // Bounce
-    piece.x += piece.vx;
-    piece.y += piece.vy;
-    if (piece.x < 0 || piece.x > 2 * canvasXSize - pieceXSize) {
-      piece.vx *= -1;
-      piece.x = Math.max(0, Math.min(piece.x, 2 * canvasXSize - pieceXSize));
-      // Bounce as a bulk
-      piece.group.forEach((groupPiece) => {
-        if (groupPiece != piece) {
-          groupPiece.vx *= -1;
-          groupPiece.x =
-            piece.x + ((groupPiece.idx - piece.idx) % gridSize) * pieceXSize;
-        }
-      });
-      boundaryHit = true;
+    // If all are playing, create a new one anyway (temporary fix)
+    const newAudio = new Audio("audio/ballwall.mp3");
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
     }
-    if (piece.y < 0 || piece.y > 2 * canvasYSize - pieceYSize) {
-      piece.vy *= -1;
-      piece.y = Math.max(0, Math.min(piece.y, 2 * canvasYSize - pieceYSize));
-      piece.group.forEach((groupPiece) => {
-        if (groupPiece != piece) {
-          groupPiece.vy *= -1;
-          groupPiece.y =
-            piece.y +
-            Math.floor((groupPiece.idx - piece.idx) / gridSize) * pieceYSize;
-        }
-      });
-      boundaryHit = true;
+    return newAudio;
+  },
+};
+
+// Audio pool for ball-ball collision sounds
+const ballBallAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
+
+  getAudio() {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio("audio/ballball.mp3");
+      this.audioObjects.push(newAudio);
+      return newAudio;
     }
-    // Breathing effect for apple and hongbao puzzles
-    if (piece.puzzleIdx === 1 || piece.puzzleIdx === 2) {
-      if (piece.group.length === 1) {
-        // Only breathe if piece is not connected
-        piece.time = currentTime;
-        piece.alpha =
-          0.5 +
-          0.5 *
-          Math.sin((piece.time / piece.period) * Math.PI * 2 + piece.phase);
-      } else {
-        // Stop breathing once connected
-        piece.alpha = 1;
+
+    // Find a non-playing audio object
+    for (const audio of this.audioObjects) {
+      if (audio.paused) {
+        audio.currentTime = 0;
+        return audio;
       }
     }
-  }
 
-  // Handle boundary highlight and sound
-  if (boundaryHit) {
-    // Check if this puzzle's page is currently active
-    const expectedPageId = "page" + (3 + idx);
-    if (currentActivePage === expectedPageId) {
-      // Play bouncing sound
-      const bouncingAudio = new Audio("audio/bouncing.m4a");
-      bouncingAudio.currentTime = 0;
-      bouncingAudio.volume = 1;
-      bouncingAudio.play();
+    // If all are playing, create a new one anyway (temporary fix)
+    const newAudio = new Audio("audio/ballball.mp3");
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
+    }
+    return newAudio;
+  },
+};
+
+// Audio pool for glass collision sounds
+const ballGlassAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
+
+  getAudio(soundFile) {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio(soundFile);
+      this.audioObjects.push(newAudio);
+      return newAudio;
     }
 
-    puzzles[idx].boundaryHighlight = true;
-    // Reset highlight after 300ms
-    setTimeout(() => {
-      if (puzzles[idx]) {
-        puzzles[idx].boundaryHighlight = false;
-        drawPuzzle(idx);
-      }
-    }, 100);
-  }
-
-  drawPuzzle(idx);
-  if (!puzzles[idx].solved) requestAnimationFrame(() => animatePuzzle(idx));
-}
-
-function onMouseDown(idx, e) {
-  if (!puzzles[idx].started) return;
-  const rect = canvases[idx].getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvases[idx].width / rect.width);
-  const my = (e.clientY - rect.top) * (canvases[idx].height / rect.height);
-  puzzles[idx].mouseX = mx;
-  puzzles[idx].mouseY = my;
-  puzzles[idx].mouseOver = true;
-  const { pieces } = puzzles[idx];
-  for (let i = pieces.length - 1; i >= 0; i--) {
-    const piece = pieces[i];
-    if (piece.contains(mx, my)) {
-      // Play dragging sound
-      const draggingAudio = new Audio("audio/dragging.m4a");
-      draggingAudio.currentTime = 0;
-      draggingAudio.volume = 0.2;
-      draggingAudio.play();
-      piece.dragging = true;
-      puzzles[idx].draggingPiece = piece;
-      piece.group.forEach((groupPiece) => {
-        if (groupPiece != piece) {
-          groupPiece.group = groupPiece.group.filter((gp) => gp !== piece);
-        } else {
-          piece.group = [piece];
-        }
-      });
-      piece.offsetX = mx - piece.x;
-      piece.offsetY = my - piece.y;
-      // Bring to front
-      pieces.splice(i, 1);
-      pieces.push(piece);
-      break;
-    }
-  }
-}
-function onMouseMove(idx, e) {
-  const rect = canvases[idx].getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvases[idx].width / rect.width);
-  const my = (e.clientY - rect.top) * (canvases[idx].height / rect.height);
-  puzzles[idx].mouseX = mx;
-  puzzles[idx].mouseY = my;
-  puzzles[idx].mouseOver = true;
-  const piece = puzzles[idx].draggingPiece;
-  if (piece) {
-    piece.x = mx - piece.offsetX;
-    piece.y = my - piece.offsetY;
-  }
-  drawPuzzle(idx);
-}
-function onMouseUp(idx, e) {
-  const rect = canvases[idx].getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (canvases[idx].width / rect.width);
-  const my = (e.clientY - rect.top) * (canvases[idx].height / rect.height);
-  puzzles[idx].mouseX = mx;
-  puzzles[idx].mouseY = my;
-  const piece = puzzles[idx].draggingPiece;
-  if (piece) {
-    piece.dragging = false;
-    puzzles[idx].draggingPiece = null;
-
-    // Store original velocity before trying to merge
-    const originalVx = piece.vx;
-    const originalVy = piece.vy;
-
-    // Snap logic
-    tryMerge(idx, piece);
-
-    // Check if piece was NOT merged (still has original group size of 1)
-    if (piece.group.length === 1 && currentDifficulty === 4) {
-      // Change direction randomly and accelerate to 1.2x speed
-      const speedMultiplier = 1.2;
-      const newSpeed = Math.sqrt(originalVx * originalVx + originalVy * originalVy) * speedMultiplier;
-
-      // Generate random angle for new direction
-      const angle = Math.random() * Math.PI * 2;
-
-      // Calculate new velocity components
-      piece.vx = Math.cos(angle) * newSpeed;
-      piece.vy = Math.sin(angle) * newSpeed;
-    }
-
-    drawPuzzle(idx);
-    checkSolved(idx);
-  }
-}
-
-function tryMerge(idx, piece) {
-  const { pieces } = puzzles[idx];
-  let merged = false;
-  for (const other of pieces) {
-    if (other === piece) continue;
-    // If adjacent in original grid
-    const dx = (other.idx % gridSize) - (piece.idx % gridSize);
-    const dy =
-      Math.floor(other.idx / gridSize) - Math.floor(piece.idx / gridSize);
-    if (Math.abs(dx) + Math.abs(dy) === 1) {
-      // If close enough in current position
-      if (
-        Math.abs(other.x - piece.x - dx * pieceXSize) < 20 &&
-        Math.abs(other.y - piece.y - dy * pieceYSize) < 20
-      ) {
-        // Merge: align positions
-        piece.x = other.x - dx * pieceXSize;
-        piece.y = other.y - dy * pieceYSize;
-        // Merge: align velocities
-        other.vx = 0;
-        other.vy = 0;
-        piece.vx = 0;
-        piece.vy = 0;
-        // Merge groups
-        piece.group = piece.group.concat(other.group);
-        other.group.forEach((groupPiece) => {
-          groupPiece.group = piece.group;
-        });
-        merged = true;
+    // Find a non-playing audio object
+    for (const audio of this.audioObjects) {
+      if (audio.paused) {
+        audio.currentTime = 0;
+        return audio;
       }
     }
-  }
-  if (merged) {
-    // Play success sound
-    const successAudio = new Audio("audio/success.m4a");
-    successAudio.currentTime = 0;
-    successAudio.volume = 0.2;
-    successAudio.play();
 
-    // Trigger merge highlight
-    puzzles[idx].mergeHighlight = true;
-    // Reset highlight after 500ms
-    setTimeout(() => {
-      if (puzzles[idx]) {
-        puzzles[idx].mergeHighlight = false;
-        drawPuzzle(idx);
-      }
-    }, 500);
-
-    // Set animation in progress flag
-    puzzles[idx].animationInProgress = true;
-    // Clear any existing timeout
-    if (puzzles[idx].animationTimeout) {
-      clearTimeout(puzzles[idx].animationTimeout);
+    // If all are playing, create a new one anyway (temporary fix)
+    const newAudio = new Audio(soundFile);
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
     }
-    // Reset flag after animation period (400ms total)
-    puzzles[idx].animationTimeout = setTimeout(() => {
-      if (puzzles[idx]) {
-        puzzles[idx].animationInProgress = false;
-        drawPuzzle(idx);
-      }
-    }, 400);
+    return newAudio;
+  },
+};
 
-    // Animate all independent unmerged pieces
-    const independentPieces = pieces.filter((p) => p.group.length === 1);
-    const currentTime = Date.now();
+// Audio pool for water obstacle collision sounds
+const waterObstacleAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
 
-    independentPieces.forEach((piece) => {
-      // Store original velocity
-      piece.originalVx = piece.vx;
-      piece.originalVy = piece.vy;
-
-      // Start expansion animation (1 second)
-      piece.targetSize = 1.1;
-      piece.animationStartTime = currentTime;
-      piece.animationDuration = 300;
-
-      // Schedule shrink animation (0.1 second) after expansion
-      setTimeout(() => {
-        if (piece && piece.group.length === 1) {
-          // Only shrink if still independent
-          piece.targetSize = 1.0;
-          piece.animationStartTime = Date.now();
-          piece.animationDuration = 100;
-        }
-      }, 300);
-    });
-  }
-}
-
-function showPage5Hint() {
-  let page5Hint = document.getElementById("page5Hint");
-  if (!page5Hint) {
-    // Create the hint element if it doesn't exist
-    page5Hint = document.createElement("div");
-    page5Hint.id = "page5Hint";
-    page5Hint.style.textAlign = "center";
-    page5Hint.style.marginTop = "20px";
-    page5Hint.style.fontSize = "24px";
-    page5Hint.style.color = "#000000";
-    page5Hint.style.fontWeight = "bold";
-    const page5 = document.getElementById("page5");
-    if (page5) {
-      page5.appendChild(page5Hint);
-    }
-  }
-  page5Hint.textContent = "鼠标挪出来，啥都能看见~！";
-  page5Hint.style.display = "block";
-}
-
-function solvedScroll() {
-  if (allSolved.every(Boolean)) {
-    // 播放group.mp3
-    const groupAudio = new Audio("audio/group.mp3");
-    groupAudio.currentTime = 0;
-    groupAudio.play();
-    const confirmBtn = document.getElementById("confirmBtn");
-    confirmBtn.disabled = false;
-    const topBtn = document.getElementById("topBtn");
-    topBtn.disabled = true;
-    confirmBtn.classList.add("active");
-    if (currentDifficulty === 3 && !difficulty3SolvedOnce) {
-      difficulty3SolvedOnce = true;
-      // 解锁难度4
-      difficulty4Unlocked = true;
-      document.getElementById("difficulty4").disabled = false;
-    }
-    stopTimer();
-    // 自动滚动到结果页
-    const resultPage = document.getElementById("page6");
-    if (resultPage)
-      resultPage.scrollIntoView({ behavior: "smooth", block: "start" });
-    // 显示恭喜文字
-    const congratulationsText = document.getElementById(
-      "congratulationsText",
-    );
-    if (congratulationsText) {
-      congratulationsText.innerHTML = "<h2>恭  喜</h2>";
-    }
-    // 激活页面6按钮并停用其他按钮
-    try {
-      const allBtns = document.querySelectorAll(".page-btn");
-      allBtns.forEach((b) => b.classList.remove("active"));
-      const activeBtn = document.querySelector(
-        ".page-btn[data-page='page6']",
-      );
-      if (activeBtn) {
-        activeBtn.classList.add("active");
-        activeBtn.classList.add("has-been-active");
-      }
-    } catch (e) {
-      // ignore if DOM structure is different
-    }
-  } else {
-    // 播放fast.mp3
-    const fastAudio = new Audio("audio/fast.mp3");
-    fastAudio.currentTime = 0;
-    fastAudio.play();
-    // If not all solved, scroll to the first unsolved puzzle (frontest unsolved)
-    scrollToFirstUnsolved();
-  }
-}
-
-// Function to handle the first puzzle solved effects
-function handleSolvedEffects(idx) {
-  // Disable all buttons during the effect
-  const allButtons = document.querySelectorAll('button, .page-btn');
-  allButtons.forEach(button => {
-    button.disabled = true;
-    button.style.pointerEvents = 'none';
-  });
-
-  // Create overlay for darkening background
-  const overlay = document.createElement('div');
-  overlay.id = 'puzzle-solved-overlay';
-  overlay.style.position = 'fixed';
-  overlay.style.top = '0';
-  overlay.style.left = '0';
-  overlay.style.width = '100%';
-  overlay.style.height = '100%';
-  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.9)'; // 90% dark
-  overlay.style.zIndex = '9998';
-  overlay.style.opacity = '0';
-  document.body.appendChild(overlay);
-
-  // Fade in overlay
-  setTimeout(() => {
-    overlay.style.transition = 'opacity 0.3s ease';
-    overlay.style.opacity = '1';
-  }, 10);
-
-  // Create eureka image element
-  const showImg = document.createElement('img');
-  switch (idx) {
-    case 0:
-      showImg.src = 'images/eureka.png';
-      break;
-    case 1:
-      showImg.src = 'images/apple.png';
-      break;
-    case 2:
-      showImg.src = 'images/hongbao.png';
-      break;
-  }
-  showImg.style.position = 'fixed';
-  showImg.style.bottom = '0px'; // Start from bottom
-  showImg.style.left = '50%';
-  showImg.style.transform = 'translateX(-50%)';
-  showImg.style.zIndex = '9999';
-  showImg.style.maxWidth = '60vw';
-  showImg.style.maxHeight = '60vh';
-  showImg.style.opacity = '0';
-  document.body.appendChild(showImg);
-
-
-  const solvedAudio = new Audio(`audio/solved${idx + 1}.mp3`);
-  solvedAudio.currentTime = 0;
-  solvedAudio.play().catch(e => console.log('Solved audio play failed:', e));
-
-  pauseTimer();
-
-  // Animate eureka image from bottom to center
-  setTimeout(() => {
-    showImg.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Quick bounce effect
-    showImg.style.bottom = '50%';
-    showImg.style.transform = 'translate(-50%, 50%)';
-    showImg.style.opacity = '1';
-  }, 50);
-
-  // After 3 seconds, move to top and fade out
-  setTimeout(() => {
-    showImg.style.transition = 'all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-    showImg.style.bottom = '100%';
-    showImg.style.transform = 'translate(-50%, 60%)';
-    showImg.style.opacity = '0';
-  }, 3000);
-
-  // After eureka disappears, play turn.mp3 and restore everything
-  setTimeout(() => {
-    // Remove overlay
-    overlay.style.transition = 'opacity 0.5s ease';
-    overlay.style.opacity = '0';
-
-    // Re-enable buttons after fade out completes
-    setTimeout(() => {
-      overlay.remove();
-      showImg.remove();
-
-      allButtons.forEach(button => {
-        button.disabled = false;
-        button.style.pointerEvents = 'auto';
-      });
-
-      resumeTimer();
-      solvedScroll();
-
-      // Play turn.mp3
-      const turnAudio = new Audio('audio/turn.mp3');
-      turnAudio.currentTime = 0;
-      turnAudio.play().catch(e => console.log('Turn audio play failed:', e));
-    }, 500);
-  }, 3800);
-}
-
-function checkSolved(idx) {
-  const { pieces } = puzzles[idx];
-  if (pieces.every((p) => p.group === pieces[0].group)) {
-    puzzles[idx].solved = true;
-    allSolved[idx] = true;
-    // Play bell sound for the solved puzzle
-    if (confirmBtnClicked) {
-      const bellAudio = new Audio(`audio/bell${idx + 1}.mp3`);
-      bellAudio.currentTime = 0;
-      bellAudio.play();
+  getAudio(soundFile) {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio(soundFile);
+      this.audioObjects.push(newAudio);
+      return newAudio;
     }
 
-    if (!confirmBtnClicked) handleSolvedEffects(idx); else solvedScroll();
-  }
-}
-
-// Scroll to the first unsolved puzzle (assumes puzzles 0..N map to pages 3..(3+N-1))
-function scrollToFirstUnsolved() {
-  if (!puzzles || puzzles.length === 0) return;
-  const firstUnsolvedIdx = puzzles.findIndex((p) => !p || !p.solved);
-  if (firstUnsolvedIdx === -1) return;
-
-  const targetPageId = "page" + (3 + firstUnsolvedIdx);
-  const targetPage = document.getElementById(targetPageId);
-  if (targetPage) {
-    targetPage.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  // update navigation buttons (if present)
-  try {
-    const allBtns = document.querySelectorAll(".page-btn");
-    allBtns.forEach((b) => b.classList.remove("active"));
-    const activeBtn = document.querySelector(
-      `.page-btn[data-page="${targetPageId}"]`,
-    );
-    if (activeBtn) {
-      activeBtn.classList.add("active");
-      activeBtn.classList.add("has-been-active");
+    // If all are playing, create a new one anyway (temporary fix)
+    const newAudio = new Audio(soundFile);
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
     }
-  } catch (e) {
-    // ignore if DOM structure is different
+    return newAudio;
+  },
+};
+
+// Audio pool for water wave sounds
+const waterWaveAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
+
+  getAudio(soundFile) {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio(soundFile);
+      this.audioObjects.push(newAudio);
+      return newAudio;
+    }
+
+
+    // If all are playing, create a new one anyway (temporary fix)
+    const newAudio = new Audio(soundFile);
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
+    }
+    return newAudio;
+  },
+};
+
+// Audio pool for spray sounds
+const sprayAudioPool = {
+  audioObjects: [],
+  maxPoolSize: 10,
+
+  getAudio(soundFile) {
+    // Create a new audio object if pool is not full
+    if (this.audioObjects.length < this.maxPoolSize) {
+      const newAudio = new Audio(soundFile);
+      this.audioObjects.push(newAudio);
+      console.log("Created new audio object for " + soundFile);
+      return newAudio;
+    }
+
+    // If all are playing, create a new one anyway
+    const newAudio = new Audio(soundFile);
+    this.audioObjects.push(newAudio);
+    // Remove oldest if pool exceeds max size
+    if (this.audioObjects.length > this.maxPoolSize) {
+      this.audioObjects.shift();
+    }
+    console.log("Created new audio object for " + soundFile);
+    return newAudio;
+  },
+};
+
+// Toggle sound on/off
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const button = document.querySelector('button[onclick="toggleSound()"]');
+  if (button) {
+    button.textContent = soundEnabled ? "安静一下" : "来点动静";
   }
-
-  // ensure floating controls are visible for puzzle pages
-  const floatingControls = document.getElementById("floatingControls");
-  if (floatingControls) floatingControls.style.display = "flex";
 }
 
-// 排行相关
-const globalBests = [{ nickname: "阿见", time: 45.23, difficulty: 1 }];
-
-function updatePersonalList() {
-  let records = JSON.parse(localStorage.getItem("jigsaw_records") || "{}");
-  let list = records[nickname] || [];
-  const ol = document.getElementById("personalList");
-  if (!ol) return;
-  ol.innerHTML = "";
-  list.forEach((record, i) => {
-    const li = document.createElement("li");
-    const difficultyText =
-      record.difficulty === 1
-        ? "休闲"
-        : record.difficulty === 2
-          ? "普通"
-          : record.difficulty === 3 ? "困难" : "炼狱";
-    li.textContent = `${nickname}: ${record.time.toFixed(2)} 秒 (${difficultyText})`;
-    ol.appendChild(li);
-  });
-}
-function updateGlobalList() {
-  const ol = document.getElementById("globalList");
-  if (!ol) return;
-  ol.innerHTML = "";
-  globalBests.slice(0, 5).forEach((item, i) => {
-    const li = document.createElement("li");
-    const difficultyText =
-      globalBests.difficulty === 1
-        ? "休闲"
-        : globalBests.difficulty === 2
-          ? "普通"
-          : globalBests.difficulty === 3 ? "困难" : "炼狱";
-    li.textContent = `${item.nickname}: ${item.time.toFixed(2)} 秒 (${difficultyText})`;
-    ol.appendChild(li);
-  });
+function playBallWallSound(normalMomentum) {
+  if (soundEnabled) {
+    var finalAdjustment = 0.8;
+    const ballwallAudio = ballWallAudioPool.getAudio();
+    ballwallAudio.currentTime = 0;
+    // Calculate volume proportional to square of normal velocity
+    const volume = Math.min(Math.pow(Math.abs(normalMomentum), 2), 1);
+    ballwallAudio.volume = finalAdjustment * volume;
+    ballwallAudio.play().catch((e) => console.log("Audio play failed:", e));
+  }
 }
 
+function playBallBallSound(normalMomentum) {
+  if (soundEnabled) {
+    // Calculate volume proportional to square of normal velocity
+    const volume = Math.min(Math.pow(Math.abs(normalMomentum), 2), 1);
+
+    // Cancel sound if gravity is on and volume is below 0.2
+    if (physicsScene.gravityEnabled && volume < 0.1) {
+      return;
+    }
+
+    const ballballAudio = ballBallAudioPool.getAudio();
+    ballballAudio.currentTime = 0;
+    ballballAudio.volume = volume;
+    ballballAudio.play().catch((e) => console.log("Audio play failed:", e));
+  }
+}
+
+function playBallGlassSound(normalVel) {
+  // if (soundEnabled) {
+  // Set velocity threshold for long sound
+  const velocityThreshold = 5.0;
+  const absNormalVel = Math.abs(normalVel);
+
+  // Select sound file based on velocity
+  const soundFile =
+    absNormalVel > velocityThreshold
+      ? "audio/ballglasslong.mp3"
+      : "audio/ballglassshort.mp3";
+
+  // Calculate volume based on velocity (louder for faster impacts)
+  const volume = Math.min(absNormalVel * 0.2, 1.0);
+
+  const ballglassAudio = ballGlassAudioPool.getAudio(soundFile);
+  ballglassAudio.currentTime = 0;
+  ballglassAudio.volume = volume;
+  // Add pitch randomization (0.8 to 1.2 times original pitch)
+  ballglassAudio.pitch = (0.8 + Math.random() * 0.4) * ballglassAudio.pitch;
+  ballglassAudio.playbackRate = 0.8 + Math.random() * 0.4;
+  ballglassAudio.play().catch((e) => console.log("Audio play failed:", e));
+  // }
+}
+
+// Initialize elements after DOM loads
 document.addEventListener("DOMContentLoaded", function () {
-  // DOM 元素
-  canvases = [
-    document.getElementById("jigsaw1"),
-    document.getElementById("jigsaw2"),
-    document.getElementById("jigsaw3"),
-  ];
-  ctxs = canvases.map((c) => c.getContext("2d"));
-
+  // Get references to elements
   const pagesContainer = document.getElementById("pagesContainer");
-  const pageNav = document.getElementById("pageNav");
   const pageBtns = document.querySelectorAll(".page-btn");
-  const startText = document.getElementById("startText");
-  const pages = document.querySelectorAll(".page");
-  const startBtn = document.getElementById("startBtn");
-  const okBtn = document.getElementById("okBtn");
-  const nicknameInput = document.getElementById("nicknameInput");
-  const floatingControls = document.getElementById("floatingControls");
-  const stopBtn = document.getElementById("stopBtn");
-  const restartBtnFloat = document.getElementById("restartBtnFloat");
-  const restartBtn = document.getElementById("restartBtn");
-  const confirmBtn = document.getElementById("confirmBtn");
-  const topBtn = document.getElementById("topBtn");
   const bunImg = document.getElementById("bun-img");
+  const startText = document.getElementById("startText");
+  const pageNav = document.getElementById("pageNav");
+  const startBtn = document.getElementById("startBtn");
+  const topBtn = document.getElementById("topBtn");
 
-  // Difficulty buttons event listeners
-  const difficulty1Btn = document.getElementById("difficulty1");
-  const difficulty2Btn = document.getElementById("difficulty2");
-  const difficulty3Btn = document.getElementById("difficulty3");
-  const difficulty4Btn = document.getElementById("difficulty4");
-  difficulty4Btn.disabled = true;
-
-  difficulty1Btn.addEventListener("click", () => setDifficulty(2));
-  difficulty3Btn.addEventListener("click", () => setDifficulty(3));
-  difficulty4Btn.addEventListener("click", () => setDifficulty(4));
-
-  // Nickname input event listener
-  nicknameInput.addEventListener("input", function () {
-    if (this.value.trim() !== "") {
-      okBtn.textContent = "写好了";
-      okBtn.classList.add("active");
-    } else {
-      okBtn.textContent = "我叫……";
-      okBtn.classList.remove("active");
-    }
-  });
-
-  // Remove active class when okBtn is clicked
-  okBtn.addEventListener("click", function () {
-    this.classList.remove("active");
-  });
-
-  // 初始化拼图（3个）
-  for (let i = 0; i < imagePaths.length; i++) {
-    canvases[i].addEventListener("mousedown", (e) => onMouseDown(i, e));
-    canvases[i].addEventListener("mousemove", (e) => onMouseMove(i, e));
-    canvases[i].addEventListener("mouseup", (e) => onMouseUp(i, e));
-    canvases[i].addEventListener("mouseleave", (e) => {
-      puzzles[i].mouseOver = false;
-      onMouseUp(i, e);
+  // Add active class to start button on hover
+  if (startBtn) {
+    startBtn.addEventListener("mouseenter", function () {
+      this.classList.add("active");
     });
-    canvases[i].addEventListener("mouseenter", (e) => {
-      const rect = canvases[i].getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (canvases[i].width / rect.width);
-      const my = (e.clientY - rect.top) * (canvases[i].height / rect.height);
-      puzzles[i].mouseX = mx;
-      puzzles[i].mouseY = my;
-      puzzles[i].mouseOver = true;
-      drawPuzzle(i);
+
+    startBtn.addEventListener("mouseleave", function () {
+      this.classList.remove("active");
     });
-    setupPuzzle(canvases[i], ctxs[i], imagePaths[i], i);
   }
 
   // 启用鼠标滚轮滚动所有页面
@@ -1055,10 +421,6 @@ document.addEventListener("DOMContentLoaded", function () {
   // 首次按键：显示导航并跳到第二页
   function onFirstKey(e) {
     if (!loadingComplete) return; // until loading complete
-
-    const startText = document.getElementById("startText");
-    const pageNav = document.getElementById("pageNav");
-    const pageBtns = document.querySelectorAll(".page-btn");
 
     if (startText && !startText.style.display.includes("none")) {
       startText.textContent = "本页有惊喜"; // Change the text
@@ -1097,7 +459,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const pageBtnAudio = new Audio("audio/pagebtn.mp3");
       pageBtnAudio.currentTime = 0;
       pageBtnAudio.volume = 0.3; // 调整音量，范围0-1
-      pageBtnAudio.play();
+      pageBtnAudio.play().catch(e => console.log("Audio play failed:", e));
     });
 
     btn.addEventListener("click", function () {
@@ -1109,7 +471,6 @@ document.addEventListener("DOMContentLoaded", function () {
           window.scrollTo({ top: 0, behavior: "instant" });
           document.documentElement.scrollTop = 0;
           document.body.scrollTop = 0;
-          const pagesContainer = document.getElementById("pagesContainer");
           if (pagesContainer) pagesContainer.scrollTop = 0;
         } else {
           targetPage.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1119,18 +480,10 @@ document.addEventListener("DOMContentLoaded", function () {
         this.classList.add("has-been-active"); // 标记为已激活过
         currentActivePage = targetPageId; // Update current active page
       }
-      // Handle page5 active state
-      if (targetPageId === "page5" && !page5Active) {
-        page5Active = true;
-        startPage5Timer();
-      } else if (targetPageId !== "page5" && page5Active) {
-        page5Active = false;
-        stopPage5Timer();
-      }
     });
   });
 
-  // 监听滚动更新当前页面并控制浮动控件显隐（只在 page3-5 显示）
+  // 监听滚动更新当前页面
   let scrollTimeout;
   pagesContainer.addEventListener("scroll", function () {
     clearTimeout(scrollTimeout);
@@ -1141,28 +494,6 @@ document.addEventListener("DOMContentLoaded", function () {
       );
       currentPageId = activeBtn ? activeBtn.dataset.page : "page1";
       currentActivePage = currentPageId; // Update current active page
-
-      // Show or hide floating controls based on the current page
-      if (["page3", "page4", "page5"].includes(currentPageId)) {
-        floatingControls.style.display = "flex";
-      } else {
-        floatingControls.style.display = "none";
-      }
-      // Handle page5 active state
-      if (currentPageId === "page5" && !page5Active) {
-        page5Active = true;
-        startPage5Timer();
-      } else if (currentPageId !== "page5" && page5Active) {
-        page5Active = false;
-        stopPage5Timer();
-      }
-      // Sync page6 timer with floating timer when on page6
-      if (currentPageId === "page6") {
-        const page6Timer = document.getElementById("page6Timer");
-        if (page6Timer) {
-          page6Timer.textContent = formatTime(timer);
-        }
-      }
     }, 100);
   });
 
@@ -1253,7 +584,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Play random audio from existing files
     const randomIndex = Math.floor(Math.random() * audioFiles.length);
     const audio = new Audio(audioFiles[randomIndex]);
-    audio.play();
+    audio.play().catch(e => console.log("Audio play failed:", e));
     // Return to pink.png
     if (leftBottomImg) {
       leftBottomImg.src = "images/pink.png";
@@ -1273,405 +604,165 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // 昵称处理
-  nickname = localStorage.getItem("jigsaw_nickname") || "";
-  nicknameInput.value = nickname || "";
-  okBtn.onclick = function () {
-    nickname = nicknameInput.value.trim();
-    if (!nickname) return alert("请输入昵称");
-    localStorage.setItem("jigsaw_nickname", nickname);
-    okBtn.disabled = true;
-    // Enable start button only if difficulty is selected
-    startBtn.disabled = !difficultySelected;
-    updatePersonalList();
-  };
-
-  function setDifficulty(level) {
-    currentDifficulty = level;
-    gridSize = difficultySettings[level].gridSize;
-    pieceXSize = canvasXSize / gridSize;
-    pieceYSize = canvasYSize / gridSize;
-    difficultySelected = true;
-
-    // Re-setup puzzles with new difficulty
-    for (let i = 0; i < imagePaths.length; i++) {
-      if (puzzles[i]) {
-        puzzles[i].started = false;
-        puzzles[i].solved = false;
+  // Start button functionality - jump to page 6
+  if (startBtn) {
+    startBtn.onclick = function () {
+      const page6 = document.getElementById("page6");
+      if (page6) {
+        page6.scrollIntoView({ behavior: "smooth", block: "start" });
+        pageBtns.forEach((btn) => {
+          btn.classList.remove("active");
+          if (btn.dataset.page === "page6") {
+            btn.classList.add("active");
+            btn.classList.add("has-been-active"); // 标记为已激活过
+          }
+        });
       }
-      setupPuzzle(canvases[i], ctxs[i], imagePaths[i], i);
-    }
-
-    // Update button styles
-    [difficulty1Btn, difficulty2Btn, difficulty3Btn, difficulty4Btn].forEach((btn, idx) => {
-      if (idx + 1 === level) {
-        btn.style.backgroundColor = "#d5d5d5";
-        btn.style.color = "white";
-      } else {
-        btn.style.backgroundColor = "";
-        btn.style.color = "";
-      }
-    });
-
-    // Check if start button should be enabled
-    if (okBtn.disabled) {
-      startBtn.disabled = false;
-    }
+    };
   }
 
-  // Start：在注册页点击，开始所有拼图并跳到 page3，显示浮动控件
-  startBtn.onclick = function () {
-    if (!nickname) return alert("请先输入昵称并点击OK!");
-    if (!difficultySelected) return alert("请选择难度!");
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    confirmBtn.disabled = true;
-    restartBtn.disabled = true;
-    restartBtnFloat.disabled = true;
-    topBtn.disabled = true;
-    // Disable difficulty buttons when game starts
-    [difficulty1Btn, difficulty2Btn, difficulty3Btn, difficulty4Btn].forEach((btn) => {
-      btn.disabled = true;
-    });
-    allSolved = [false, false, false];
-    for (let i = 0; i < imagePaths.length; i++) {
-      puzzles[i].started = true;
-      puzzles[i].solved = false;
-      scatterPieces(i);
-      animatePuzzle(i);
-    }
-    startTimer();
-    // 跳到第3页
-    const page3 = document.getElementById("page3");
-    if (page3) page3.scrollIntoView({ behavior: "smooth", block: "start" });
-    // 显示浮动控件
-    pageBtns.forEach((btn) => {
-      btn.classList.remove("active");
-      if (btn.dataset.page === "page3") {
-        btn.classList.add("active");
-        btn.classList.add("has-been-active"); // 标记为已激活过
+  // Top button functionality - return to home
+  if (topBtn) {
+    topBtn.onclick = function () {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      if (pagesContainer) pagesContainer.scrollTop = 0;
+      pageBtns.forEach((btn) => {
+        btn.classList.remove("active");
+      });
+      const firstPageBtn = Array.from(pageBtns).find(
+        (btn) => btn.dataset.page === "page1",
+      );
+      if (firstPageBtn) {
+        firstPageBtn.classList.add("active");
+        firstPageBtn.classList.add("has-been-active"); // 标记为已激活过
       }
-    });
-    floatingControls.style.display = "flex";
-  };
-
-  // Stop：停止计时与动画（重置为初始未开始状态）
-  stopBtn.onclick = function () {
-    startBtn.disabled = !okBtn.disabled || !difficultySelected;
-    confirmBtn.disabled = true;
-    confirmBtn.classList.remove("active");
-    stopBtn.disabled = true;
-    restartBtn.disabled = false;
-    restartBtnFloat.disabled = false;
-    // Enable difficulty buttons when game stops
-    [difficulty1Btn, difficulty2Btn, difficulty3Btn].forEach((btn) => {
-      btn.disabled = false;
-    });
-    if (difficulty4Unlocked) {
-      difficulty4Btn.disabled = false;
-    } else {
-      difficulty4Btn.disabled = true;
-    }
-    stopTimer();
-    stopPage5Timer();
-    page5Active = false;
-    page5ActiveTimer = 0;
-    // Clear the hint text
-    const page5Hint = document.getElementById("page5Hint");
-    if (page5Hint) {
-      page5Hint.style.display = "none";
-    }
-    // 将每个拼图重置（重新绘制初始状态）
-    for (let i = 0; i < imagePaths.length; i++) {
-      puzzles[i].started = false;
-      puzzles[i].solved = false;
-      setupPuzzle(canvases[i], ctxs[i], imagePaths[i], i);
-    }
-  };
-
-  // 重启（页面底部/浮动重启共用）
-  function doRestart() {
-    startBtn.disabled = true;
-    confirmBtn.disabled = true;
-    stopBtn.disabled = true;
-    restartBtn.disabled = true;
-    restartBtnFloat.disabled = true;
-    okBtn.disabled = false;
-    // Set active state for okBtn based on nickname input
-    if (nicknameInput.value.trim() !== "") {
-      okBtn.classList.add("active");
-    } else {
-      okBtn.classList.remove("active");
-    }
-    // Enable difficulty buttons when game restarts
-    [difficulty1Btn, difficulty2Btn, difficulty3Btn].forEach((btn) => {
-      btn.disabled = false;
-    });
-    if (difficulty4Unlocked) {
-      difficulty4Btn.disabled = false;
-    } else {
-      difficulty4Btn.disabled = true;
-    }
-    // Set default difficulty
-    setDifficulty(1);
-    stopTimer();
-    stopPage5Timer();
-    page5Active = false;
-    page5ActiveTimer = 0;
-    // Clear the hint text
-    const page5Hint = document.getElementById("page5Hint");
-    if (page5Hint) {
-      page5Hint.style.display = "none";
-    }
-    allSolved = [false, false, false];
-    for (let i = 0; i < imagePaths.length; i++) {
-      puzzles[i].started = false;
-      puzzles[i].solved = false;
-      setupPuzzle(canvases[i], ctxs[i], imagePaths[i], i);
-    }
-    // Scroll to second page and update nav state
-    const secondPage = document.getElementById("page2");
-    if (secondPage) {
-      secondPage.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (pageNav) pageNav.style.display = "flex";
-      pageBtns.forEach((b) => b.classList.remove("active"));
-      const btn = Array.from(pageBtns).find((b) => b.dataset.page === "page2");
-      if (btn) {
-        btn.classList.add("active");
-        btn.classList.add("has-been-active"); // 标记为已激活过
-      }
-    }
-    // 重置为 "往下有惊喜" 当重启按钮被点击
-    const congratulationsText = document.getElementById("congratulationsText");
-    if (congratulationsText) {
-      congratulationsText.innerHTML = "<h2>往下有惊喜</h2>";
-    }
+    };
   }
-
-  restartBtn.onclick = doRestart;
-  restartBtnFloat.onclick = doRestart;
-
-  // Confirm：保存成绩并更新排行
-  confirmBtn.onclick = function () {
-    // Play confirmation sound
-    const confirmAudio = new Audio("audio/confirm.mp3");
-    confirmAudio.currentTime = 0;
-    confirmAudio.volume = 0.2;
-    confirmAudio.play().catch(e => console.log("Audio play failed:", e));
-
-    // 标记confirmBtn首次点击
-    if (!confirmBtnClicked) {
-      confirmBtnClicked = true;
-      removeScrollBlock();
-    }
-
-    // 标记page6按钮为已激活过
-    const page6Btn = Array.from(pageBtns).find((btn) => btn.dataset.page === "page6");
-    if (page6Btn) {
-      page6Btn.classList.add("has-been-active");
-    }
-
-    // use timer (ms) convert to seconds
-    const timeSeconds = timer / 1000;
-    let records = JSON.parse(localStorage.getItem("jigsaw_records") || "{}");
-    if (!records[nickname]) records[nickname] = [];
-    records[nickname].push({
-      time: timeSeconds,
-      difficulty: currentDifficulty,
-    });
-    records[nickname].sort((a, b) => a.time - b.time);
-    records[nickname] = records[nickname].slice(0, 5);
-    localStorage.setItem("jigsaw_records", JSON.stringify(records));
-    updatePersonalList();
-    updateGlobalList();
-    confirmBtn.disabled = true;
-    stopBtn.disabled = true;
-    restartBtn.disabled = false;
-    restartBtnFloat.disabled = false;
-    topBtn.disabled = false;
-    if (difficulty4Unlocked) {
-      difficulty4Btn.disabled = false;
-    } else {
-      difficulty4Btn.disabled = true;
-    }
-
-    // Update page6 timer with final time
-    const page6Timer = document.getElementById("page6Timer");
-    if (page6Timer) {
-      page6Timer.textContent = formatTime(timer);
-    }
-
-    // Replace congratulations text with particles.gif using absolute positioning
-    const congratulationsText = document.getElementById("congratulationsText");
-    if (congratulationsText) {
-      // Store original content
-      const originalContent = congratulationsText.innerHTML;
-
-      // Add relative positioning to the container
-      congratulationsText.style.position = "relative";
-
-      // Create gif element and position it absolutely over the text
-      const gifElement = document.createElement("img");
-      gifElement.src = "images/particles.gif";
-      gifElement.alt = "Particles";
-      gifElement.style.position = "absolute";
-      gifElement.style.top = "0";
-      gifElement.style.left = "0";
-      gifElement.style.width = "100%";
-      gifElement.style.height = "100%";
-      gifElement.style.objectFit = "contain";
-      gifElement.style.zIndex = "10";
-
-      // Hide the original text temporarily
-      const h2 = congratulationsText.querySelector("h2");
-      if (h2) {
-        h2.style.opacity = "0";
-      }
-
-      // Add the gif to the container
-      congratulationsText.appendChild(gifElement);
-
-      // After the gif plays once (assuming ~3 seconds), restore the text
-      setTimeout(() => {
-        // Remove the gif
-        if (gifElement.parentNode) {
-          gifElement.parentNode.removeChild(gifElement);
-        }
-
-        // Restore original content but with "往下有惊喜"
-        congratulationsText.innerHTML = "<h2>往下有惊喜</h2>";
-
-        // Reset positioning
-        congratulationsText.style.position = "";
-
-        // Ensure no animations are applied
-        const h2 = congratulationsText.querySelector("h2");
-        if (h2) {
-          h2.classList.remove("congrats-animate", "color-dancing");
-          h2.style.animation = "none";
-          h2.style.color = "#000000"; // Reset to original color
-        }
-      }, 1400); // Adjust timing based on actual gif duration
-    }
-  };
-
-  // top 按钮回首页
-  topBtn.onclick = function () {
-    window.scrollTo({ top: 0, behavior: "instant" });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    const pagesContainer = document.getElementById("pagesContainer");
-    if (pagesContainer) pagesContainer.scrollTop = 0;
-    pageBtns.forEach((btn) => {
-      btn.classList.remove("active");
-    });
-    const firstPageBtn = Array.from(pageBtns).find(
-      (btn) => btn.dataset.page === "page1",
-    );
-    if (firstPageBtn) {
-      firstPageBtn.classList.add("active");
-      firstPageBtn.classList.add("has-been-active"); // 标记为已激活过
-    }
-
-    // Handle page5 active state
-    if (page5Active) {
-      page5Active = false;
-      stopPage5Timer();
-    }
-  };
 
   // 初始按钮状态
-  okBtn.disabled = false;
-  // Set initial active state for okBtn based on nickname input
-  if (nicknameInput.value.trim() !== "") {
-    okBtn.classList.add("active");
-  } else {
-    okBtn.classList.remove("active");
+  if (startBtn) {
+    startBtn.disabled = false;
   }
-  startBtn.disabled = true;
-  confirmBtn.disabled = true;
-  stopBtn.disabled = true;
-  restartBtn.disabled = true;
-  restartBtnFloat.disabled = true;
-  // Enable difficulty buttons initially
-  [difficulty1Btn, difficulty2Btn, difficulty3Btn].forEach((btn) => {
-    btn.disabled = false;
-  });
-  if (difficulty4Unlocked) {
-    difficulty4Btn.disabled = false;
-  } else {
-    difficulty4Btn.disabled = true;
-  }
-  // Set default difficulty
-  setDifficulty(1);
-  localStorage.removeItem("jigsaw_records"); // 可以移除或注释掉以保留记录
-  updatePersonalList();
-  updateGlobalList();
 });
 
-// Color random walk animation function
-function startColorRandomWalk(element) {
-  // Define base colors (black, red, orange, yellow, white)
-  const colors = [
-    // { r: 0, g: 0, b: 0 },     // black
-    { r: 255, g: 0, b: 0 }, // red
-    { r: 255, g: 165, b: 0 }, // orange
-    { r: 255, g: 255, b: 0 }, // yellow
-    { r: 255, g: 255, b: 255 }, // white
-  ];
+// Global variable to hold the toggleMusic function
+let toggleMusicFunction = null;
 
-  // Initialize random weights for each color
-  let weights = colors.map(() => Math.random());
+// Floating Music Button Functionality
+document.addEventListener("DOMContentLoaded", function () {
+  const musicBtn = document.getElementById("floatingMusicBtn");
+  const textContainer = document.querySelector(".music-text-container");
+  const musicText = document.querySelector(".music-text");
+  let audio = null;
+  let isPlaying = false;
+  let animationFrameId = null;
+  let scrollPosition = 0;
+  let scrollDirection = 1;
+  let scrollSpeed = 0.5;
 
-  // Normalize weights to sum to 1
-  const normalizeWeights = () => {
-    const sum = weights.reduce((a, b) => a + b, 0);
-    weights = weights.map((w) => w / sum);
-  };
+  // Preload button sound
+  const buttonSound = new Audio("audio/button.m4a");
 
-  normalizeWeights();
+  // Initialize audio element
+  function initAudio() {
+    audio = new Audio("audio/KevinVillecco-Yoshigemia.mp3");
+    audio.volume = 0.2;
+    audio.loop = true;
+  }
 
-  // Animation loop
-  const animate = () => {
-    // Randomly adjust weights in small increments
-    weights = weights.map((w) => {
-      // Small random adjustment (-0.05 to 0.05)
-      let adjustment = (Math.random() - 0.5) * 0.1;
-      return Math.max(0, Math.min(1, w + adjustment));
-    });
+  // Attract attention animation for music button
+  function startAttentionAnimation() {
+    if (!isPlaying && musicBtn) {
+      // Animation: expand and shrink twice in 1 second
+      musicBtn.classList.add("attention");
+      setTimeout(() => {
+        musicBtn.classList.remove("attention");
+        // Schedule next animation in 10 seconds
+        attentionInterval = setTimeout(startAttentionAnimation, 10000);
+      }, 1000);
+    }
+  }
 
-    normalizeWeights();
+  // Start attention animation
+  let attentionInterval = setTimeout(startAttentionAnimation, 1000);
 
-    // Calculate weighted average color
-    let r = 0,
-      g = 0,
-      b = 0;
-    colors.forEach((color, index) => {
-      r += color.r * weights[index];
-      g += color.g * weights[index];
-      b += color.b * weights[index];
-    });
+  // Toggle music play/pause
+  function toggleMusic() {
+    if (!audio) {
+      initAudio();
+    }
 
-    // Convert to hex color
-    const toHex = (num) => {
-      const hex = Math.round(num).toString(16);
-      return hex.length === 1 ? "0" + hex : hex;
-    };
+    if (isPlaying) {
+      audio.pause();
+      musicBtn.classList.remove("playing");
+      textContainer.classList.remove("scrolling");
+      cancelAnimationFrame(animationFrameId);
+    } else {
+      audio.play().catch(e => console.log("Audio play failed:", e));
+      musicBtn.classList.add("playing");
+      startScrolling();
+      // Stop attention animation when music starts
+      if (attentionInterval) {
+        clearTimeout(attentionInterval);
+        attentionInterval = null;
+      }
+      musicBtn.classList.remove("attention");
+    }
+    isPlaying = !isPlaying;
+  }
 
-    const hexColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  // Start scrolling animation
+  function startScrolling() {
+    const textWidth = musicText.offsetWidth;
+    const containerWidth = textContainer.offsetWidth;
 
-    // Apply color to element
-    element.style.color = hexColor;
+    function animate() {
+      if (scrollDirection === 1) {
+        // Scroll left
+        scrollPosition += scrollSpeed;
+        if (scrollPosition >= textWidth - 0.5 * containerWidth) {
+          scrollDirection = -1;
+        }
+      } else {
+        // Scroll right
+        scrollPosition -= scrollSpeed;
+        if (scrollPosition <= -0.5 * containerWidth) {
+          scrollDirection = 1;
+        }
+      }
 
-    // Continue animation
-    requestAnimationFrame(animate);
-  };
+      musicText.style.transform = `translateX(-${scrollPosition}px)`;
+      animationFrameId = requestAnimationFrame(animate);
+    }
 
-  // Start animation
-  animate();
-}
-// ...existing code...
+    animationFrameId = requestAnimationFrame(animate);
+  }
 
+  // Add click event listener
+  if (musicBtn) {
+    musicBtn.addEventListener("click", toggleMusic);
+  }
+  // Add click event listeners to all other buttons (except page buttons)
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((button) => {
+    // Skip music button and page buttons
+    if (
+      button.id !== "floatingMusicBtn" &&
+      !button.classList.contains("page-btn")
+    ) {
+      button.addEventListener("click", function () {
+        // Play button sound
+        buttonSound.currentTime = 0; // Reset sound to start
+        buttonSound.play().catch(e => console.log("Audio play failed:", e));
+      });
+    }
+  });
+
+  // Make toggleMusic available globally
+  toggleMusicFunction = toggleMusic;
+});
 // ------------------------------------------------------------------
 
 var canvas1 = document.getElementById("myCanvas1");
@@ -3294,8 +2385,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-// Global variable to hold the toggleMusic function
-let toggleMusicFunction = null;
 
 // Floating Music Button Functionality
 document.addEventListener("DOMContentLoaded", function () {
@@ -3920,162 +3009,6 @@ function drawGravity() {
   }
 }
 
-// Global sound enable state
-let soundEnabled = false;
-
-// Audio pool for ball-wall collision sounds
-const ballWallAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 10,
-
-  getAudio() {
-    // Find an available audio object
-    for (let audio of this.audioObjects) {
-      if (audio.ended || audio.currentTime === 0) {
-        return audio;
-      }
-    }
-
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio("audio/ballwall.mp3");
-      this.audioObjects.push(newAudio);
-      return newAudio;
-    }
-
-    // If pool is full, return the oldest one
-    return this.audioObjects[0];
-  },
-};
-
-// Audio pool for ball-ball collision sounds
-const ballBallAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 3,
-
-  getAudio() {
-    // Find an available audio object
-    for (let audio of this.audioObjects) {
-      if (audio.ended || audio.currentTime === 0) {
-        return audio;
-      }
-    }
-
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio("audio/ballball.mp3");
-      this.audioObjects.push(newAudio);
-      return newAudio;
-    }
-
-    // If pool is full, return the oldest one
-    return this.audioObjects[0];
-  },
-};
-
-// Audio pool for obstacle wall collision sounds
-const ballGlassAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 10,
-
-  getAudio(soundFile) {
-    // Find an available audio object
-    for (let audio of this.audioObjects) {
-      if (audio.ended || audio.currentTime === 0) {
-        audio.src = soundFile;
-        return audio;
-      }
-    }
-
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio(soundFile);
-      this.audioObjects.push(newAudio);
-      return newAudio;
-    }
-
-    // If pool is full, return the oldest one and update its source
-    const oldestAudio = this.audioObjects[0];
-    oldestAudio.src = soundFile;
-    return oldestAudio;
-  },
-};
-
-// Audio pool for water obstacle collision sounds
-const waterObstacleAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 10,
-
-  getAudio(soundFile) {
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio(soundFile);
-      this.audioObjects.push(newAudio);
-      return newAudio;
-    }
-
-    // If all are playing, create a new one anyway (temporary fix)
-    const newAudio = new Audio(soundFile);
-    this.audioObjects.push(newAudio);
-    // Remove oldest if pool exceeds max size
-    if (this.audioObjects.length > this.maxPoolSize) {
-      this.audioObjects.shift();
-    }
-    return newAudio;
-  },
-};
-
-// Audio pool for water wave sounds
-const waterWaveAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 10,
-
-  getAudio(soundFile) {
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio(soundFile);
-      this.audioObjects.push(newAudio);
-      return newAudio;
-    }
-
-
-    // If all are playing, create a new one anyway (temporary fix)
-    const newAudio = new Audio(soundFile);
-    this.audioObjects.push(newAudio);
-    // Remove oldest if pool exceeds max size
-    if (this.audioObjects.length > this.maxPoolSize) {
-      this.audioObjects.shift();
-    }
-    return newAudio;
-  },
-};
-
-// Audio pool for spray sounds
-const sprayAudioPool = {
-  audioObjects: [],
-  maxPoolSize: 10,
-
-  getAudio(soundFile) {
-    // Create a new audio object if pool is not full
-    if (this.audioObjects.length < this.maxPoolSize) {
-      const newAudio = new Audio(soundFile);
-      this.audioObjects.push(newAudio);
-      console.log("Created new audio object for " + soundFile);
-      return newAudio;
-    }
-
-    // If all are playing, create a new one anyway
-    const newAudio = new Audio(soundFile);
-    this.audioObjects.push(newAudio);
-    // Remove oldest if pool exceeds max size
-    if (this.audioObjects.length > this.maxPoolSize) {
-      this.audioObjects.shift();
-    }
-    console.log("Created new audio object for " + soundFile);
-    return newAudio;
-  },
-};
-
 // Toggle sound on/off
 function toggleSound() {
   soundEnabled = !soundEnabled;
@@ -4471,8 +3404,69 @@ function handleTankMouseMove(e) {
   scene.mouseY = (canvas1.height - my) / cScaleY;
 }
 
+function applyExplosionForce() {
+  if (!scene.forceMode) return;
+
+  var explosionForce = scene.forceMagnitude * 100;
+  
+  var f = scene.fluid;
+  var dx, dy, distance, force, fx, fy;
+  
+  // Apply explosion force to particles
+  for (var i = 0; i < f.numParticles; i++) {
+    var px = f.particlePos[2 * i];
+    var py = f.particlePos[2 * i + 1];
+    
+    // Direction away from mouse
+    dx = px - scene.mouseX;
+    dy = py - scene.mouseY;
+    distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance > 0 && distance < scene.maxDistance) {
+      // Calculate force magnitude: 10x the attraction force
+      if (distance < scene.minDistance) {
+        force = explosionForce;
+      } else {
+        force = explosionForce * (scene.minDistance / distance);
+      }
+      
+      // Normalize direction
+      fx = (dx / distance) * force;
+      fy = (dy / distance) * force;
+      
+      // Apply force to particle velocity
+      f.particleVel[2 * i] += fx * scene.dt;
+      f.particleVel[2 * i + 1] += fy * scene.dt;
+    }
+  }
+  
+  // Apply explosion force to obstacle
+  dx = scene.obstacleX - scene.mouseX;
+  dy = scene.obstacleY - scene.mouseY;
+  distance = Math.sqrt(dx * dx + dy * dy);
+  
+  if (distance > 0 && distance < scene.maxDistance) {
+    // Calculate force magnitude: 10x the attraction force
+    if (distance < scene.minDistance) {
+      force = scene.forceMagnitude * 10;
+    } else {
+      force = scene.forceMagnitude * 10 * (scene.minDistance / distance);
+    }
+    
+    // Normalize direction
+    fx = (dx / distance) * force;
+    fy = (dy / distance) * force;
+    
+    // Apply force to obstacle
+    scene.obstacleVx += (fx / scene.obstacleMass) * scene.dt;
+    scene.obstacleVy += (fy / scene.obstacleMass) * scene.dt;
+  }
+}
+
 function handleTankMouseUp(e) {
   if (!scene.forceMode) return;
+  // Apply explosion force when mouse is released
+  applyExplosionForce();
   scene.mouseDown = false;
 }
 
