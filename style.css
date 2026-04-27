@@ -79,18 +79,6 @@ main {
     margin-bottom: 3em;
 }
 
-.game-image {
-    display: flex;
-    justify-content: center;
-    /* 水平居中 */
-    align-items: center;
-    /* 垂直居中（如果需要） */
-    width: 100%;
-    /* 确保容器占满宽度 */
-    margin-top: 3em;
-    margin-bottom: 3em;
-}
-
 @keyframes flicker {
     0% {
         color: #ffb3c2;
@@ -184,90 +172,6 @@ canvas {
     align-items: center;
 }
 
-.jigsaw-container {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    /* Stack vertically */
-    justify-content: center;
-    align-items: center;
-    gap: 2em;
-    margin: 2em auto;
-    min-height: calc(100vh - 8em);
-    box-sizing: border-box;
-}
-
-.jigsaw {
-    width: 100%;
-    max-width: 70vw;
-    height: auto;
-    border: 2px solid #333;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0 auto;
-}
-
-.controls {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1em;
-    margin-top: 2em;
-}
-
-#floatingTimer {
-    font-size: 1.5em;
-    font-family: monospace;
-}
-
-.ranking-block {
-    background: #f8f8f8;
-    border-radius: 8px;
-    padding: 1em 2em;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.ranking-block>div {
-    width: 220px;
-}
-
-.ranking-block h3 {
-    margin-bottom: 0.5em;
-    font-size: 1.1em;
-}
-
-/* 分页容器样式 - 固定定位在右侧 */
-.page-nav {
-    position: fixed;
-    right: 30px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: none;
-    /* 初始隐藏，按下任意键后显示 */
-    flex-direction: column;
-    gap: 20px;
-    z-index: 1000;
-}
-
-/* 分页按钮样式 - 小图 */
-.page-btn {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    border: 3px solid #fff;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    overflow: hidden;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-}
-
 /* 选中状态 - 放大 */
 .page-btn.active {
     transform: scale(1.2);
@@ -276,102 +180,17 @@ canvas {
     z-index: 1001;
 }
 
-/* Display image when active or has been active */
-.page-nav .page-btn:first-child.active,
-.page-nav .page-btn:first-child.has-been-active {
-    background: url('images/b1.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-.page-nav .page-btn:nth-child(2).active,
-.page-nav .page-btn:nth-child(2).has-been-active {
-    background: url('images/b2.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-.page-nav .page-btn:nth-child(3).active,
-.page-nav .page-btn:nth-child(3).has-been-active {
-    background: url('images/b3.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-.page-nav .page-btn:nth-child(4).active,
-.page-nav .page-btn:nth-child(4).has-been-active {
-    background: url('images/b4.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-.page-nav .page-btn:nth-child(5).active,
-.page-nav .page-btn:nth-child(5).has-been-active {
-    background: url('images/b5.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-.page-nav .page-btn:nth-child(6).active,
-.page-nav .page-btn:nth-child(6).has-been-active {
-    background: url('images/b6.png') no-repeat center center;
-    background-size: 110%;
-    color: transparent;
-}
-
-/* 分页内容区域 */
-.page {
-    min-height: 100vh;
-    /* 每个分页占满视口高度 */
-    width: 100%;
-    opacity: 1;
-    transition: opacity 0.1s ease;
-    scroll-margin-top: 0;
-}
-
 /* 平滑滚动到分页 */
 html {
     scroll-behavior: smooth;
 }
 
-/* 禁用鼠标滚轮滚动 */
+/* 启用鼠标滚轮滚动 */
 body {
-    overflow-y: hidden;
-    /* 隐藏滚动条，但保留滚动功能 */
-    height: 100vh;
+    overflow-y: auto;
+    /* 显示滚动条，允许滚动功能 */
+    min-height: 100vh;
     position: relative;
-}
-
-.pages-container {
-    height: 100vh;
-    overflow-y: scroll;
-    /* 保留滚动功能但隐藏滚动条 */
-    scroll-behavior: smooth;
-    -ms-overflow-style: none;
-    /* IE和Edge隐藏滚动条 */
-    scrollbar-width: none;
-    /* Firefox隐藏滚动条 */
-}
-
-.pages-container::-webkit-scrollbar {
-    display: none;
-    /* Chrome、Safari和Opera隐藏滚动条 */
-}
-
-/* 浮动控制块样式（拼图页显示） */
-.floating-controls {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 2000;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
 }
 
 /* Floating Music Button Styles */
@@ -530,39 +349,4 @@ body {
 .flicker-text.hidden {
     opacity: 0;
     pointer-events: none;
-}
-
-/* 第二页样式调整 */
-.second-page .game-image {
-    margin-top: 2em;
-}
-
-
-.new_button {
-    background-color: #606060;
-    border: none;
-    color: white;
-    padding: 8px 12px;
-    font-size: 14px;
-    font-family: 'CustomFont', Arial, sans-serif;
-    margin: 4px 2px;
-    cursor: pointer;
-    border-radius: 4px;
-}
-
-.new_button:hover {
-    background-color: #808080;
-}
-
-
-.slider {
-    -webkit-appearance: none;
-    width: 80px;
-    height: 6px;
-    border-radius: 5px;
-    background: #d3d3d3;
-    outline: none;
-    opacity: 0.7;
-    -webkit-transition: .2s;
-    transition: opacity .2s;
 }

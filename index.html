@@ -8,122 +8,56 @@
 </head>
 
 <body>
-    <!-- 分页导航按钮容器 -->
-    <div class="page-nav" id="pageNav">
-        <div class="page-btn active" data-page="page1" title="首页">
+    <div class="top-images-container">
+        <div class="left-images">
+            <img src="images/bun.png" alt="bun" class="bun-img" id="bun-img">
+            <img src="images/pink.png" alt="pink" class="left-bottom-img">
         </div>
-        <div class="page-btn" data-page="page2" title="互动页"></div>
-        <div class="page-btn" data-page="page6" title="物理场景"></div>
+        <img src="images/sis.png" alt="sis" class="sis-img">
+    </div>
+    <div class="pinyin-image">
+        <img src="images/pinyin.png" alt="旦妹拼音" style="max-width: 20%; height: auto;">
+    </div>
+    <div id="loadingBar"
+        style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 20px;">
+        <div style="font-size: 24px; margin-bottom: 10px; color: #000000;">音频加载中</div>
+        <div style="width: 300px; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden;">
+            <div id="loadingProgress"
+                style="height: 100%; background-color: #ffb3c2; width: 0%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="loadingPercentage" style="margin-top: 10px; font-size: 18px; color: #000000;">0%</div>
     </div>
 
-    <!-- 所有分页内容的容器 -->
-    <div class="pages-container" id="pagesContainer">
-        <!-- 第一页：首页 -->
-        <div class="page" id="page1">
-            <div class="top-images-container">
-                <div class="left-images">
-                    <img src="images/bun.png" alt="bun" class="bun-img" id="bun-img">
-                    <img src="images/pink.png" alt="pink" class="left-bottom-img">
-                </div>
-                <img src="images/sis.png" alt="sis" class="sis-img">
-            </div>
-            <div class="pinyin-image">
-                <img src="images/pinyin.png" alt="旦妹拼音" style="max-width: 20%; height: auto;">
-            </div>
-            <div class="game-image">
-                <img src="images/game.png" alt="互动体验" style="max-width: 20%; height: auto;">
-            </div>
-            <div class="flicker-text" style="font-size: 24px; letter-spacing: 4px" id="startText" style="display: none;">
-                按任意键开始
-            </div>
-            <div id="loadingBar" style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 20px;">
-                <div style="font-size: 24px; margin-bottom: 10px; color: #000000;">音频加载中</div>
-                <div style="width: 300px; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden;">
-                    <div id="loadingProgress" style="height: 100%; background-color: #ffb3c2; width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-                <div id="loadingPercentage" style="margin-top: 10px; font-size: 18px; color: #000000;">0%</div>
-            </div>
-        </div>
-
-        <!-- 第二页：互动体验页 -->
-        <div class="page" id="page2">
-            <div class="text-row"
-                style="text-align: center; margin: 1em; padding: 0px; background-color: #ffffff; border: 0px solid #ccc; border-radius: 1px;">
-                <p style="font-size: 48px; color: #000000; font-weight: bold; padding-top: 50px;">互 动 体 验</p>
-                <p style="font-size: 18px; color: #666; margin: 10; padding-top: 5px;">探索有趣的物理世界</p>
-            </div>
-            
-            <div style="height: 2em;"></div>
-            <div style="font-size: 24px; text-align: center; margin-top: 1em; padding-bottom: 3em;">
-                <button id="startBtn">开始探索！</button>
-            </div>
-        </div>
-
-        <div class="page" id="page6">
-            <div style="text-align:center; margin-top:1em;padding-top: 20px;">
-                <h2>结果与排名</h2>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin: 10px 0;">
-                    <span id="page6Timer" style="font-size: xx-large; font-weight: bold;">00:00:00</span>
-                    <button id="confirmBtn" disabled style="font-size: 18px; padding: 10px 20px;">确认</button>
-                </div>
-            </div>
-            <div style="text-align: center; margin-top: 0.5em;">
-                <button id="restartBtn" disabled>重新开始</button>
-                <button id="topBtn">回到首页</button>
-            </div>
-            <div class="ranking-block" style="display: flex; justify-content: center; gap: 2em; margin-top: 1em;">
-                <div class="personal-ranking">
-                    <h3>个人历史成绩</h3>
-                    <ol id="personalList"></ol>
-                </div>
-                <div class="global-ranking">
-                    <h3>全服最佳</h3>
-                    <ol id="globalList"></ol>
-                </div>
-            </div>
-
-            <!-- 最底部：快速回到首页 -->
-            <div class="congratulations" id="congratulationsText"
-                style="text-align:center; margin-top:-1em;font-size: 100px; color: #000000; font-weight: bold; padding-top: 0px;">
-                <h2>往下有惊喜</h2>
-            </div>
-            <!-- <p style="text-align:center; font-size: 18px; color: #666; margin-top: -100px; padding-top: 0px;">PgDn 向下滚动</p> -->
-
-            <!-- Inside #page6 -->
-            <div style="text-align: center; margin-top: 6em; margin-bottom: 1em; font-size: 20px">
-                <button class="button" onclick="togglePause()" id="pauseButton">开始</button>
-                <button class="button" onclick="toggleForce()">原力同在</button>
-            </div>
-
-            <!-- Add the hint text below the button -->
-            <div id="dragHint"
-                style="visibility: hidden; text-align: center; margin: 10px 0; font-size: 16px; color: #666;">
-                试着鼠标拽一下我
-            </div>
-
-            <canvas id="myCanvas1"
-                style="border:4px solid #ffb3c2; background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); box-shadow: 0 4px 16px rgba(255,105,180,0.2); border-radius: 16px; width: 1000px; height: 500px;"></canvas>
-
-
-            <div style="text-align: center; margin-top: 4em;margin-bottom: 1em;font-size: 20px">
-                <button class="button" onclick="setupSceneGravity()">重来</button>
-                <button class="button" onclick="toggleGravity()">取消重力</button>
-                <button class="button" onclick="toggleSound()">来点动静</button>
-                <button class="button" onclick="toggleBilliards()">试下壁纸</button>
-            </div>
-            <!-- Add the hint text below the button -->
-            <div id="dragHint2"
-                style="visibility: hidden; text-align: center; margin: 10px 0; font-size: 16px; color: #666;">
-                试着鼠标拽一下我
-            </div>
-            <!-- Inside #page6, at the bottom -->
-            <canvas id="myCanvas2"
-                style="border:4px solid #ffb3c2; background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); box-shadow: 0 4px 16px rgba(255,105,180,0.2); border-radius: 16px; width: 1000px; height: 500px;">
-            </canvas>
-
-            <!-- <p style="text-align:center; font-size: 18px; color: #666; margin: 20px; padding-top: 0px;">PgUp 向上滚动</p> -->
-        </div>
+    <!-- Inside #page6 -->
+    <div style="text-align: center; margin-top: 6em; margin-bottom: 1em; font-size: 20px">
+        <button class="button" onclick="togglePause()" id="pauseButton">开始</button>
+        <button class="button" onclick="toggleForce()">原力同在</button>
     </div>
+
+    <!-- Add the hint text below the button -->
+    <div id="dragHint" style="visibility: hidden; text-align: center; margin: 10px 0; font-size: 16px; color: #666;">
+        试着鼠标拽一下我
+    </div>
+
+    <canvas id="myCanvas1"
+        style="border:4px solid #ffb3c2; background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); box-shadow: 0 4px 16px rgba(255,105,180,0.2); border-radius: 16px; width: 1000px; height: 500px;"></canvas>
+
+
+    <div style="text-align: center; margin-top: 4em;margin-bottom: 1em;font-size: 20px">
+        <button class="button" onclick="setupSceneGravity()">重来</button>
+        <button class="button" onclick="toggleGravity()">取消重力</button>
+        <button class="button" onclick="toggleSound()">来点动静</button>
+        <button class="button" onclick="toggleBilliards()">试下壁纸</button>
+    </div>
+    <!-- Add the hint text below the button -->
+    <div id="dragHint2" style="visibility: hidden; text-align: center; margin: 10px 0; font-size: 16px; color: #666;">
+        试着鼠标拽一下我
+    </div>
+    <!-- Inside #page6, at the bottom -->
+    <canvas id="myCanvas2"
+        style="border:4px solid #ffb3c2; background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 100%); box-shadow: 0 4px 16px rgba(255,105,180,0.2); border-radius: 16px; width: 1000px; height: 500px;">
+    </canvas>
+
 
     <div class="floating-music-container">
         <button id="floatingMusicBtn" class="floating-music-btn">
@@ -134,11 +68,11 @@
         </div>
     </div>
 
-    
-	<!-- <div class="copyright">
+
+    <!-- <div class="copyright">
 		Copyright © 2026 Code Monkey
 	</div> -->
-    
+
 
     <script src="script.js"></script>
 </body>

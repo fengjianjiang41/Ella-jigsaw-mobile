@@ -69,7 +69,6 @@ function updateLoadingProgress() {
   const progress = Math.round((audioLoadedCount / audioTotalCount) * 100);
   const progressBar = document.getElementById("loadingProgress");
   const percentageText = document.getElementById("loadingPercentage");
-  const startText = document.getElementById("startText");
 
   if (progressBar) {
     progressBar.style.width = progress + "%";
@@ -86,17 +85,10 @@ function updateLoadingProgress() {
 
 function completeLoading() {
   const loadingBar = document.getElementById("loadingBar");
-  const startText = document.getElementById("startText");
 
   if (loadingBar) {
     loadingBar.style.display = "none";
   }
-  if (startText) {
-    startText.style.display = "flex";
-  }
-
-  // 移除滚动阻止
-  removeScrollBlock();
 }
 
 function loadAudioFiles() {
@@ -120,25 +112,15 @@ function loadAudioFiles() {
 
 // Start loading audio files when the DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  // 初始隐藏startText
-  const startText = document.getElementById("startText");
-  if (startText) {
-    startText.style.display = "none";
-  }
   loadAudioFiles();
 });
 
-const imagePaths = [
-  "images/eureka.png",
-  "images/apple.png",
-  "images/hongbao.png",
-];
 const audioFiles = ["audio/emo.mp3", "audio/ua.mp3", "audio/ui.mp3"];
 let bunClickCount = 0;
 
-let confirmBtnClicked = false;
 
-let currentActivePage = "page1"; // Track current active page
+
+// Page structure removed - now using continuous flow
 
 // 音频启用状态
 let soundEnabled = true;
@@ -380,122 +362,8 @@ function playBallGlassSound(normalVel) {
 // Initialize elements after DOM loads
 document.addEventListener("DOMContentLoaded", function () {
   // Get references to elements
-  const pagesContainer = document.getElementById("pagesContainer");
-  const pageBtns = document.querySelectorAll(".page-btn");
   const bunImg = document.getElementById("bun-img");
   const startText = document.getElementById("startText");
-  const pageNav = document.getElementById("pageNav");
-  const startBtn = document.getElementById("startBtn");
-  const topBtn = document.getElementById("topBtn");
-
-  // Add active class to start button on hover
-  if (startBtn) {
-    startBtn.addEventListener("mouseenter", function () {
-      this.classList.add("active");
-    });
-
-    startBtn.addEventListener("mouseleave", function () {
-      this.classList.remove("active");
-    });
-  }
-
-  // 启用鼠标滚轮滚动所有页面
-  // 阻止滚动直到加载完成和confirmBtn首次点击
-  function handleScroll(e) {
-    if (!loadingComplete) {
-      // || !confirmBtnClicked
-      e.preventDefault();
-      return false;
-    }
-  }
-  pagesContainer.addEventListener("wheel", handleScroll, { passive: false });
-
-  // 加载完成后移除滚动阻止
-  function removeScrollBlock() {
-    // 只在confirmBtn点击后移除滚动阻止
-    if (confirmBtnClicked) {
-      pagesContainer.removeEventListener("wheel", handleScroll);
-    }
-  }
-
-  // 首次按键：显示导航并跳到第二页
-  function onFirstKey(e) {
-    if (!loadingComplete) return; // until loading complete
-
-    if (startText && !startText.style.display.includes("none")) {
-      startText.textContent = "本页有惊喜"; // Change the text
-      pageNav.style.display = "flex";
-      const secondPage = document.getElementById("page2");
-      if (secondPage) {
-        secondPage.scrollIntoView({ behavior: "smooth", block: "start" });
-        pageBtns.forEach((btn) => {
-          btn.classList.remove("active");
-          if (btn.dataset.page === "page2") {
-            btn.classList.add("active");
-            btn.classList.add("has-been-active"); // 标记为已激活过
-          }
-        });
-      }
-      // // Toggle music when first key is pressed
-      // if (toggleMusicFunction) {
-      //   toggleMusicFunction();
-      // }
-
-      // Play turn.mp3 audio when first key is pressed
-      const turnAudio = new Audio("audio/turn.mp3");
-      turnAudio.currentTime = 0;
-      turnAudio.play().catch(e => console.log("Audio play failed:", e));
-
-      document.removeEventListener("keydown", onFirstKey);
-    }
-  }
-  document.addEventListener("keydown", onFirstKey);
-
-  // 分页按钮跳转
-  pageBtns.forEach((btn) => {
-    // 添加悬停事件播放音频
-    btn.addEventListener("mouseenter", function () {
-      if (!confirmBtnClicked) return;
-      const pageBtnAudio = new Audio("audio/pagebtn.mp3");
-      pageBtnAudio.currentTime = 0;
-      pageBtnAudio.volume = 0.3; // 调整音量，范围0-1
-      pageBtnAudio.play().catch(e => console.log("Audio play failed:", e));
-    });
-
-    btn.addEventListener("click", function () {
-      if (!loadingComplete || !confirmBtnClicked) return;
-      const targetPageId = this.dataset.page;
-      const targetPage = document.getElementById(targetPageId);
-      if (targetPage) {
-        if (targetPageId == "page1") {
-          window.scrollTo({ top: 0, behavior: "instant" });
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-          if (pagesContainer) pagesContainer.scrollTop = 0;
-        } else {
-          targetPage.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-        pageBtns.forEach((b) => b.classList.remove("active"));
-        this.classList.add("active");
-        this.classList.add("has-been-active"); // 标记为已激活过
-        currentActivePage = targetPageId; // Update current active page
-      }
-    });
-  });
-
-  // 监听滚动更新当前页面
-  let scrollTimeout;
-  pagesContainer.addEventListener("scroll", function () {
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-      let currentPageId = "page1";
-      const activeBtn = Array.from(pageBtns).find((btn) =>
-        btn.classList.contains("active"),
-      );
-      currentPageId = activeBtn ? activeBtn.dataset.page : "page1";
-      currentActivePage = currentPageId; // Update current active page
-    }, 100);
-  });
 
   // 显示音效与浮动文字（保留）
 
@@ -570,18 +438,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Get the left-bottom image element
     const leftBottomImg = document.querySelector(".left-bottom-img");
-
-    // Check if click count is a multiple of 7
-    // if (bunClickCount % 7 === 0) {
-    //   // Play the new audio file
-    //   const audio = new Audio("audio/jcxbroken.m4a");
-    //   audio.play();
-    //   // Substitute pink.png with smile.png
-    //   if (leftBottomImg) {
-    //     leftBottomImg.src = "images/smile.png";
-    //   }
-    // } else {
-    // Play random audio from existing files
     const randomIndex = Math.floor(Math.random() * audioFiles.length);
     const audio = new Audio(audioFiles[randomIndex]);
     audio.play().catch(e => console.log("Audio play failed:", e));
@@ -604,47 +460,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Start button functionality - jump to page 6
-  if (startBtn) {
-    startBtn.onclick = function () {
-      const page6 = document.getElementById("page6");
-      if (page6) {
-        page6.scrollIntoView({ behavior: "smooth", block: "start" });
-        pageBtns.forEach((btn) => {
-          btn.classList.remove("active");
-          if (btn.dataset.page === "page6") {
-            btn.classList.add("active");
-            btn.classList.add("has-been-active"); // 标记为已激活过
-          }
-        });
-      }
-    };
-  }
 
-  // Top button functionality - return to home
-  if (topBtn) {
-    topBtn.onclick = function () {
-      window.scrollTo({ top: 0, behavior: "instant" });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-      if (pagesContainer) pagesContainer.scrollTop = 0;
-      pageBtns.forEach((btn) => {
-        btn.classList.remove("active");
-      });
-      const firstPageBtn = Array.from(pageBtns).find(
-        (btn) => btn.dataset.page === "page1",
-      );
-      if (firstPageBtn) {
-        firstPageBtn.classList.add("active");
-        firstPageBtn.classList.add("has-been-active"); // 标记为已激活过
-      }
-    };
-  }
-
-  // 初始按钮状态
-  if (startBtn) {
-    startBtn.disabled = false;
-  }
 });
 
 // Global variable to hold the toggleMusic function
@@ -2331,11 +2147,9 @@ canvas1.addEventListener("touchend", (event) => endDrag());
 canvas1.addEventListener(
   "touchmove",
   (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
     drag(event.touches[0].clientX, event.touches[0].clientY);
   },
-  { passive: false },
+  { passive: true },
 );
 
 function togglePause() {
@@ -2383,121 +2197,6 @@ document.addEventListener("DOMContentLoaded", function () {
       childList: true,
     });
   }
-});
-
-
-// Floating Music Button Functionality
-document.addEventListener("DOMContentLoaded", function () {
-  const musicBtn = document.getElementById("floatingMusicBtn");
-  const textContainer = document.querySelector(".music-text-container");
-  const musicText = document.querySelector(".music-text");
-  let audio = null;
-  let isPlaying = false;
-  let animationFrameId = null;
-  let scrollPosition = 0;
-  let scrollDirection = 1;
-  let scrollSpeed = 0.5;
-
-  // Preload button sound
-  const buttonSound = new Audio("audio/button.m4a");
-
-  // Initialize audio element
-  function initAudio() {
-    audio = new Audio("audio/KevinVillecco-Yoshigemia.mp3");
-    audio.volume = 0.2;
-    audio.loop = true;
-  }
-
-  // Attract attention animation for music button
-  function startAttentionAnimation() {
-    if (!isPlaying && musicBtn) {
-      // Animation: expand and shrink twice in 1 second
-      musicBtn.classList.add("attention");
-      setTimeout(() => {
-        musicBtn.classList.remove("attention");
-        // Schedule next animation in 10 seconds
-        attentionInterval = setTimeout(startAttentionAnimation, 10000);
-      }, 1000);
-    }
-  }
-
-  // Start attention animation
-  let attentionInterval = setTimeout(startAttentionAnimation, 1000);
-
-  // Toggle music play/pause
-  function toggleMusic() {
-    if (!audio) {
-      initAudio();
-    }
-
-    if (isPlaying) {
-      audio.pause();
-      musicBtn.classList.remove("playing");
-      textContainer.classList.remove("scrolling");
-      cancelAnimationFrame(animationFrameId);
-    } else {
-      audio.play();
-      musicBtn.classList.add("playing");
-      startScrolling();
-      // Stop attention animation when music starts
-      if (attentionInterval) {
-        clearTimeout(attentionInterval);
-        attentionInterval = null;
-      }
-      musicBtn.classList.remove("attention");
-    }
-    isPlaying = !isPlaying;
-  }
-
-  // Start scrolling animation
-  function startScrolling() {
-    const textWidth = musicText.offsetWidth;
-    const containerWidth = textContainer.offsetWidth;
-
-    function animate() {
-      if (scrollDirection === 1) {
-        // Scroll left
-        scrollPosition += scrollSpeed;
-        if (scrollPosition >= textWidth - 0.5 * containerWidth) {
-          scrollDirection = -1;
-        }
-      } else {
-        // Scroll right
-        scrollPosition -= scrollSpeed;
-        if (scrollPosition <= -0.5 * containerWidth) {
-          scrollDirection = 1;
-        }
-      }
-
-      musicText.style.transform = `translateX(-${scrollPosition}px)`;
-      animationFrameId = requestAnimationFrame(animate);
-    }
-
-    animationFrameId = requestAnimationFrame(animate);
-  }
-
-  // Add click event listener
-  if (musicBtn) {
-    musicBtn.addEventListener("click", toggleMusic);
-  }
-  // Add click event listeners to all other buttons (except page buttons)
-  const buttons = document.querySelectorAll("button");
-  buttons.forEach((button) => {
-    // Skip music button and page buttons
-    if (
-      button.id !== "floatingMusicBtn" &&
-      !button.classList.contains("page-btn")
-    ) {
-      button.addEventListener("click", function () {
-        // Play button sound
-        buttonSound.currentTime = 0; // Reset sound to start
-        buttonSound.play();
-      });
-    }
-  });
-
-  // Make toggleMusic available globally
-  toggleMusicFunction = toggleMusic;
 });
 
 // Add this function to calculate average absolute velocity
@@ -2906,11 +2605,9 @@ canvas2.addEventListener("touchend", (event) => endDrag2());
 canvas2.addEventListener(
   "touchmove",
   (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
     drag2(event.touches[0].clientX, event.touches[0].clientY);
   },
-  { passive: false },
+  { passive: true },
 );
 
 // Preload wallpaper images
